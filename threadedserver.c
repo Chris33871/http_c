@@ -15,35 +15,38 @@
 
 #define MYPORT "8080"
 #define BACKLOG 50 // how many pending connections queue will hold
-void error(const char *msg) {
-    perror(msg);
-    exit(0);
-}
+#define BUFFER_SIZE 1024
 
 // custom struct to pass values
 typedef struct {
     int sock_fd;
 } thread_config_t;
 
-// void* generic pointer, allow return of any type of data
-// void *args generic input parameters
-void *server_thread_to_run(void *args) {
-    thread_config_t *ptr_client_config = (thread_config_t *)args;
-    printf("ptr_client_config (thread function): %p\n", ptr_client_config);
-    int new_connection_fd = ptr_client_config->sock_fd;
+void send_http_response(int new_connection_fd) {}
 
-    // using wall-clock time to time how long thread takes to run
-    struct timeval start, end;
-    double time_used;
-    gettimeofday(&start, NULL);
+void handle_hello(int new_connection_fd) {
+    // this just sends a simple html response packet when user enters the
+    // correct url (formatting a HTTP response)
+    char *ptr_http_hello_response =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html; charset=UTF-8\r\n\r\n"
+        "<!DOCTYPE html>\r\n"
+        "<html>\r\n"
+        "<head>\r\n"
+        "<title>Testing Basic HTTP-SERVER</title>\r\n"
+        "</head>\r\n"
+        "<body>\r\n"
+        "Hello, Alejandro!\r\n"
+        "</body>\r\n"
+        "</html>\r\n";
+    send(new_connection_fd, ptr_http_hello_response,
+         strlen(ptr_http_hello_response), 0);
+}
 
-    // here i made it artificially do work by just adding a random time delay so
-    // it is actually easier to see the concurrency work in action with the
-    // threads
-    int delay_seconds = 1 + rand() % 6; // 1-3 seconds
-    sleep(delay_seconds);
-
-    int len, bytes_recv;
+// sending simple byte messages: out of the scope right now as I will be
+// focussing on http stuff
+void send_simple_byte_messages(int new_connection_fd) {
+    int len;
     char *msg = "Alejandro was here!\n";
     len = strlen(msg);
 
@@ -70,15 +73,49 @@ void *server_thread_to_run(void *args) {
     // free memory
     free(second_msg);
     free(ptr_peer_addr_in);
+}
+
+void error(const char *msg) {
+    perror(msg);
+    exit(0);
+}
+
+// void* generic pointer, allow return of any type of data
+// void *args generic input parameters
+void *server_thread_to_run(void *args) {
+    thread_config_t *ptr_client_config = (thread_config_t *)args;
+    printf("ptr_client_config (thread function): %p\n", ptr_client_config);
+    int new_connection_fd = ptr_client_config->sock_fd;
+
+    // using wall-clock time to time how long thread takes to run
+    struct timeval start, end;
+    double time_used;
+    gettimeofday(&start, NULL);
+
+    // here i made it artificially do work by just adding a random time delay so
+    // it is actually easier to see the concurrency work in action with the
+    // threads
+    // int delay_seconds = 1 + rand() % 6; // 1-3 seconds
+    // sleep(delay_seconds);
+
+    // receive the http packet from web browser and 'process' it (in this case
+    // im just printing it out)
+    int bytes_recv;
+    char http_request_buffer[BUFFER_SIZE];
+    bytes_recv = recv(new_connection_fd, http_request_buffer,
+                      sizeof(http_request_buffer), 0);
+    if (bytes_recv < 0) {
+        error("Error receiving message from client!");
+    } else {
+        printf("HTTP REQUEST PACKET RECEIVED: %s\n", http_request_buffer);
+    }
+
+    // send http response!
+    handle_hello(new_connection_fd);
+
+    // free mem
     free(ptr_client_config);
 
-    char buf[512];
-    bytes_recv = recv(new_connection_fd, buf, sizeof(buf), 0);
-    if (bytes_recv < 0) {
-        error("Error receiving message from clien!");
-    } else {
-        printf("Message received: %s\n", buf);
-    }
     close(new_connection_fd);
 
     gettimeofday(&end, NULL);

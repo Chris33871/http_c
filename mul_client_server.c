@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,36 +75,62 @@ int main(int argc, char *argv[]) {
     // [] Send the first connected user back in the queue
 
     char *usr_msg_buf = malloc(128);
+    int c1_socket, c2_socket;
+    char *msg = "You're connected to the server,\n";
+    c1_socket = accept(sockfd, (struct sockaddr *)&their_addr, &their_addr_len);
+    send(c1_socket, msg, strlen(msg), 0);
+
+    c2_socket = accept(sockfd, (struct sockaddr *)&their_addr, &their_addr_len);
+    send(c2_socket, msg, strlen(msg), 0);
+    
+    struct pollfd pfd[]={{c1_socket, POLLIN, 0}, {c1_socket, POLLIN, 0}};
+
+    int bytes_recv, bytes_sent;
     while (1) {
-        int bytes_recv;
         char *ptr_str = malloc(256);
 
-        new_sockfd = accept(sockfd, (struct sockaddr *)&their_addr, &their_addr_len);
-        char *msg = "You're connected to the server,\n";
-        send(new_sockfd, msg, strlen(msg), 0);
-
         // INFO: Send the stored message to the next user
-        if (usr_msg_buf[0] != '\0' && usr_msg_buf[0] != '\n') {
-            int s_status = send(new_sockfd, usr_msg_buf, bytes_recv, 0);
-            if (s_status != -1) {
-                printf("Sent message: %s to user %d\n\n", usr_msg_buf, new_sockfd);
-                /*free(usr_msg_buf); // FIX: Only works for one message*/
+        if (pfd[0].revents & POLLIN || POLLOUT) {
+            printf("In c1 space\n");
+            if (usr_msg_buf[0] != '\0' && usr_msg_buf[0] != '\n') {
+                bytes_sent = send(c2_socket, usr_msg_buf, bytes_recv, 0);
+                if (bytes_sent != -1) {
+                    printf("Sent message: %s to user %d\n\n", usr_msg_buf, c2_socket);
+                }
+            }
+
+            while ((bytes_recv = recv(c1_socket, ptr_str, 512, 0)) > 0) {
+                printf("Received: %d bytes from client %d\t", bytes_recv, c2_socket);
+                printf("Message received: %s\n", ptr_str);
+                memcpy(usr_msg_buf, ptr_str, bytes_recv);
+                fflush(stdout);
+                break;
+            }
+        }
+        if (pfd[1].revents & POLLIN || POLLOUT) {
+            printf("In c2 space\n");
+            if (usr_msg_buf[0] != '\0' && usr_msg_buf[0] != '\n') {
+                bytes_sent = send(c1_socket, usr_msg_buf, bytes_recv, 0);
+                if (bytes_sent != -1) {
+                    printf("Sent message: %s to user %d\n\n", usr_msg_buf, c1_socket);
+                }
+            }
+
+            while ((bytes_recv = recv(c2_socket, ptr_str, 512, 0)) > 0) {
+                printf("Received: %d bytes from client %d\t", bytes_recv, c2_socket);
+                printf("Message received: %s\n", ptr_str);
+                memcpy(usr_msg_buf, ptr_str, bytes_recv);
+                fflush(stdout);
+                break;
             }
         }
 
-        while ((bytes_recv = recv(new_sockfd, ptr_str, 512, 0)) > 0) {
-            printf("Received: %d bytes from client %d\t", bytes_recv, new_sockfd);
-            printf("Message received: %s\n", ptr_str);
-            memcpy(usr_msg_buf, ptr_str, bytes_recv);
-            fflush(stdout);
-            break;
-        }
 
-        if (bytes_recv == 0) {
-            printf("Client %d disconnected.\n", new_sockfd);
-        } else if (bytes_recv == -1) {
-            printf("Error receiving message - Client likely disconnected");
-        }
+        /*if (bytes_recv == 0) {*/
+        /*    printf("Client %d disconnected.\n", c1_socket);*/
+        /*} else if (bytes_recv == -1) {*/
+        /*    printf("Error receiving message - Client likely disconnected");*/
+        /*}*/
 
     }
     freeaddrinfo(res);

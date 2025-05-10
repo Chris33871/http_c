@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,35 +49,28 @@ int main(int argc, char *argv[]) {
 
     if (connect(client_fd, res->ai_addr, res->ai_addrlen) == -1) {
         error("connection failed");
+    } else {
+        printf("Connected to the server\n\n");
+    }
+    // TODO:
+    // Try connecting again if you see that you aren't connected
+    // Find a way to check if you're connected, if not, re-establish connection
+
+
+    // TODO:
+    // - Receive the message for the previous user before 
+    // sending your message
+
+    char *recv_str = malloc(128);
+    int bytes_recv = recv(client_fd, recv_str, 128, 0);
+    if (bytes_recv != -1) {
+        printf("Messages from the server: %s\n", recv_str);
     }
 
-    /*const char *string_to_parse = argv[2];*/
-    /*int sent_data =*/
-    /*    send(client_fd, string_to_parse, strlen(string_to_parse), 0);*/
-    /*if (sent_data == -1) {*/
-    /*    error("send failed");*/
-    /*}*/
-    /*printf("Message sent to server: %s\n", string_to_parse);*/
-    /**/
-    /*char buf[1024];*/
-    /*while (recv(client_fd, buf, sizeof(buf), 0) > 0) {*/
-    /*    printf("\nMessage(s) recevied from server:\n");*/
-    /*    printf("%s\n", buf);*/
-    /*} */
-    // INFO: The while loop won't be interactive. Once the server finishes sending messages,
-    // it will stop and won't run again
-
-    /*
-     * TODO: Stream messages:
-     * Handle the length of the string send so that the packet don't mess up
-     * Handle the hex mapping (unicode, ASCII, etc)
-     */
-
     puts("Press C-c to quit:");
-
     char *ptr_str = malloc(128);
     while (1) {
-        printf("\nEnter String to send: \n");
+        printf("\nPress enter to send your message: \n");
         scanf("%s", ptr_str);
 
         int bytes_sent = send(client_fd, ptr_str, strlen(ptr_str), 0);
@@ -87,9 +81,31 @@ int main(int argc, char *argv[]) {
             printf("Message sent: %s\n", ptr_str);
         }
 
+        char *recv_str = malloc(128);
+        int bytes_recv = recv(client_fd, recv_str, 128, 0);
+        if (bytes_recv != -1) {
+            printf("Messages from the previous user: %s\n\n", recv_str);
+        }
+
+        // INFO: Check that we're still connected - if not reconnect
+        /*int num_events = poll(pfds, 1, 2500);*/
+        /*if (num_events == 0) {*/
+        /*    printf("poll timed out %d\n", num_events);*/
+        /*} else { // Reconnect*/
+        /*    int pollout_happened = pfds[0].revents & POLLOUT;*/
+        /*    if (pollout_happened) {*/
+        /*        printf("File descriptor %d is ready to read\n", pfds[0].fd);*/
+        /*        connect(client_fd, res->ai_addr, res->ai_addrlen);*/
+        /*    } else {*/
+        /*        printf("Unexpected event occurred: %d\n", pfds[0].revents);*/
+        /*    }*/
+        /*}*/
+
+
         free(ptr_str);
         ptr_str = malloc(128);
     }
+    free(recv_str);
 
 
     freeaddrinfo(res);
